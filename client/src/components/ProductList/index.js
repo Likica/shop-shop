@@ -1,104 +1,69 @@
-import React, { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import React, { useEffect } from "react";
+import ProductItem from "../ProductItem";
+import { useStoreContext } from "../../utils/GlobalState";
+import { UPDATE_PRODUCTS } from "../../utils/actions";
 import { useQuery } from '@apollo/react-hooks';
+import { QUERY_PRODUCTS } from "../../utils/queries";
+import { idbPromise } from "../../utils/helpers";
+import spinner from "../../assets/spinner.gif"
 
-import Cart from "client/src/components/Cart";
-import { useStoreContext } from "client/src/utils/GlobalState.js";
-import {
-  REMOVE_FROM_CART,
-  UPDATE_CART_QUANTITY,
-  ADD_TO_CART,
-  UPDATE_PRODUCTS,
-} from "client/src/utils/actions.js";
-import { QUERY_PRODUCTS } from "client/src/utils/queries.js";
-import spinner from 'client/src/assets/spinner.gif'
-
-function Detail() {
+function ProductList() {
   const [state, dispatch] = useStoreContext();
-  const { id } = useParams();
 
-  const [currentProduct, setCurrentProduct] = useState({})
+  const { currentCategory } = state;
 
   const { loading, data } = useQuery(QUERY_PRODUCTS);
 
-  const { products, cart } = state;
-
   useEffect(() => {
-    if (products.length) {
-      setCurrentProduct(products.find(product => product._id === id));
-    } else if (data) {
+    if(data) {
       dispatch({
-        type: UPDATE_PRODUCTS,
-        products: data.products
+           type: UPDATE_PRODUCTS,
+          products: data.products
+        });
+        data.products.forEach((product) => {
+          idbPromise('products', 'put', product);
+        });
+    } else if (!loading) {
+      idbPromise('products', 'get').then((products) => {
+        dispatch({
+          type: UPDATE_PRODUCTS,
+         products: products
+       });
       });
     }
-  }, [products, data, dispatch, id]);
+  }, [data, loading, dispatch]);
 
-  const addToCart = () => {
-    const itemInCart = cart.find((cartItem) => cartItem._id === id)
-    if (itemInCart) {
-      dispatch({
-        type: UPDATE_CART_QUANTITY,
-        _id: id,
-        purchaseQuantity: parseInt(itemInCart.purchaseQuantity) + 1
-      });
-    } else {
-      dispatch({
-        type: ADD_TO_CART,
-        product: { ...currentProduct, purchaseQuantity: 1 }
-      });
+  function filterProducts() {
+    if (!currentCategory) {
+      return state.products;
     }
+
+    return state.products.filter(product => product.category._id === currentCategory);
   }
 
-  const removeFromCart = () => {
-    dispatch({
-      type: REMOVE_FROM_CART,
-      _id: currentProduct._id
-    });
-
-  };
-
   return (
-    <>
-      {currentProduct && cart ? (
-        <div className="container my-1">
-          <Link to="/">
-            ← Back to Products
-          </Link>
-
-          <h2>{currentProduct.name}</h2>
-
-          <p>
-            {currentProduct.description}
-          </p>
-
-          <p>
-            <strong>Price:</strong>
-            ${currentProduct.price}
-            {" "}
-            <button onClick={addToCart}>
-              Add to Cart
-            </button>
-            <button
-              disabled={!cart.find(p => p._id === currentProduct._id)}
-              onClick={removeFromCart}
-            >
-              Remove from Cart
-            </button>
-          </p>
-
-          <img
-            src={`/images/${currentProduct.image}`}
-            alt={currentProduct.name}
-          />
+    <div className="my-2">
+      <h2>Our Products:</h2>
+      {state.products.length ? (
+        <div className="flex-row">
+            {filterProducts().map(product => (
+                <ProductItem
+                  key= {product._id}
+                  _id={product._id}
+                  image={product.image}
+                  name={product.name}
+                  price={product.price}
+                  quantity={product.quantity}
+                />
+            ))}
         </div>
-      ) : null}
-      {
-        loading ? <img src={spinner} alt="loading" /> : null
-      }
-      <Cart />
-    </>
+      ) : (
+        <h3>You haven't added any products yet!</h3>
+      )}
+      { loading ? 
+      <img src={spinner} alt="loading" />: null}
+    </div>
   );
-};
+}
 
-export default Detail;
+export default ProductList;

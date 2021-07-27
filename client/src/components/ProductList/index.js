@@ -1,59 +1,104 @@
-import React, { useEffect } from 'react';
-import { useQuery } from '@apollo/client';
+import React, { useEffect, useState } from "react";
+import { Link, useParams } from "react-router-dom";
+import { useQuery } from '@apollo/react-hooks';
 
-import { useStoreContext } from '../../utils/GlobalState';
-import { UPDATE_PRODUCTS } from '../../utils/actions';
+import Cart from "client/src/components/Cart";
+import { useStoreContext } from "client/src/utils/GlobalState.js";
+import {
+  REMOVE_FROM_CART,
+  UPDATE_CART_QUANTITY,
+  ADD_TO_CART,
+  UPDATE_PRODUCTS,
+} from "client/src/utils/actions.js";
+import { QUERY_PRODUCTS } from "client/src/utils/queries.js";
+import spinner from 'client/src/assets/spinner.gif'
 
-import ProductItem from '../ProductItem';
-import { QUERY_PRODUCTS } from '../../utils/queries';
-import spinner from '../../assets/spinner.gif';
-
-function ProductList({ currentCategory }) {
+function Detail() {
   const [state, dispatch] = useStoreContext();
+  const { id } = useParams();
 
-  // const { currentCategory } = state;
-  
+  const [currentProduct, setCurrentProduct] = useState({})
+
   const { loading, data } = useQuery(QUERY_PRODUCTS);
-  
+
+  const { products, cart } = state;
+
   useEffect(() => {
-    if (data) {
+    if (products.length) {
+      setCurrentProduct(products.find(product => product._id === id));
+    } else if (data) {
       dispatch({
         type: UPDATE_PRODUCTS,
         products: data.products
       });
     }
-  }, [data, dispatch]);
-  
-  function filterProducts() {
-    if (!currentCategory) {
-      return state.products;
+  }, [products, data, dispatch, id]);
+
+  const addToCart = () => {
+    const itemInCart = cart.find((cartItem) => cartItem._id === id)
+    if (itemInCart) {
+      dispatch({
+        type: UPDATE_CART_QUANTITY,
+        _id: id,
+        purchaseQuantity: parseInt(itemInCart.purchaseQuantity) + 1
+      });
+    } else {
+      dispatch({
+        type: ADD_TO_CART,
+        product: { ...currentProduct, purchaseQuantity: 1 }
+      });
     }
-  
-    return state.products.filter(product => product.category._id === currentCategory);
   }
 
-  return (
-    <div className="my-2">
-      <h2>Our Products:</h2>
-      {state.products.length ? (
-        <div className="flex-row">
-          {filterProducts().map((product) => (
-            <ProductItem
-              key={product._id}
-              _id={product._id}
-              image={product.image}
-              name={product.name}
-              price={product.price}
-              quantity={product.quantity}
-            />
-          ))}
-        </div>
-      ) : (
-        <h3>You haven't added any products yet!</h3>
-      )}
-      {loading ? <img src={spinner} alt="loading" /> : null}
-    </div>
-  );
-}
+  const removeFromCart = () => {
+    dispatch({
+      type: REMOVE_FROM_CART,
+      _id: currentProduct._id
+    });
 
-export default ProductList;
+  };
+
+  return (
+    <>
+      {currentProduct && cart ? (
+        <div className="container my-1">
+          <Link to="/">
+            ← Back to Products
+          </Link>
+
+          <h2>{currentProduct.name}</h2>
+
+          <p>
+            {currentProduct.description}
+          </p>
+
+          <p>
+            <strong>Price:</strong>
+            ${currentProduct.price}
+            {" "}
+            <button onClick={addToCart}>
+              Add to Cart
+            </button>
+            <button
+              disabled={!cart.find(p => p._id === currentProduct._id)}
+              onClick={removeFromCart}
+            >
+              Remove from Cart
+            </button>
+          </p>
+
+          <img
+            src={`/images/${currentProduct.image}`}
+            alt={currentProduct.name}
+          />
+        </div>
+      ) : null}
+      {
+        loading ? <img src={spinner} alt="loading" /> : null
+      }
+      <Cart />
+    </>
+  );
+};
+
+export default Detail;
